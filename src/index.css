@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-light: #3b82f6;
+  --color-secondary: #3b82f6;
+  --color-secondary-dark: #2563eb;
+  --color-secondary-light: #60a5fa;
+  --color-bg: #f8fafc;
+  --color-card: #ffffff;
+  --font-sans: "Inter", "sans-serif";
+
+  /* Register custom designed grays for absolute text, background, and border visibility in dark mode */
+  --color-slate-150: #f1f5f9;
+  --color-slate-155: #e2e8f0;
+  --color-slate-205: #cbd5e1;
+  --color-slate-250: #94a3b8;
+  --color-slate-350: #cbd5e1;
+  --color-slate-450: #64748b;
+  --color-slate-455: #475569;
+  --color-slate-550: #334155;
+  --color-slate-650: #1e293b;
+  --color-slate-655: #1e293b;
+  --color-slate-750: #0f172a;
+  --color-slate-850: #0f172a;
+  --color-slate-855: #020617;
+  --color-slate-905: #020617;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 font-sans antialiased transition-colors duration-300;
+  }
+  
+  html.dark body {
+    @apply bg-slate-900 text-slate-100;
+  }
+}
+
+/* Custom styles for professional college student aesthetic */
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+.card-hover {
+  transition: all 0.2s ease-in-out;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
