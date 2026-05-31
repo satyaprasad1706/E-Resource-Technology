@@ -1,4 +1,4 @@
-# Web Syllabus & E-Resource Technology (WSE)
+#  E-Resource Technology
 
 A cloud-native, high-fidelity academic portal engineered to bridge the gap between academic syllabi and learning resources for engineering colleges. Featuring a dynamic role-based architecture, secure institutional access, a live streaming Gemini AI tutor, and Firestore synchronization.
 
