@@ -26,10 +26,73 @@ const Resources = () => {
   const [newSize, setNewSize] = useState('2.5 MB');
   const [newDesc, setNewDesc] = useState('');
 
+  // File Upload States
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [fileData, setFileData] = useState('');
+  const [fileError, setFileError] = useState('');
+
   // Selected resource for preview modal
   const [previewResource, setPreviewResource] = useState(null);
 
   const canUpload = currentUser?.role === 'Admin' || currentUser?.role === 'Professor';
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (Firestore document limit is 1MB)
+    if (file.size > 1024 * 1024) {
+      setFileError("⚠️ File is too large! Firestore documents must be under 1 MB. Please compress or select a smaller PDF.");
+      setSelectedFile(null);
+      setFileData('');
+      return;
+    }
+
+    setFileError('');
+    setSelectedFile(file);
+
+    // Auto-fill Title if empty
+    const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.'));
+    if (!newTitle) {
+      setNewTitle(nameWithoutExt);
+    }
+    
+    // Auto-calculate Size
+    const sizeInMB = file.size / (1024 * 1024);
+    if (sizeInMB < 0.1) {
+      setNewSize(`${(file.size / 1024).toFixed(1)} KB`);
+    } else {
+      setNewSize(`${sizeInMB.toFixed(2)} MB`);
+    }
+
+    // Auto-detect format from extension
+    const ext = file.name.split('.').pop().toUpperCase();
+    if (['PDF', 'PPTX', 'DOCX', 'PPT', 'DOC'].includes(ext)) {
+      setNewFormat(ext);
+    } else {
+      setNewFormat('PDF');
+    }
+
+    // Read file as Base64 data URL
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setFileData(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleOpenLiveFile = (resource) => {
+    if (!resource.fileData) return;
+    
+    const newTab = window.open();
+    if (newTab) {
+      newTab.document.write(
+        `<iframe src="${resource.fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+      );
+    } else {
+      alert("Popup blocked! Please allow popups to view the file in your browser.");
+    }
+  };
 
   const fetchResources = async () => {
     try {
@@ -52,12 +115,32 @@ const Resources = () => {
 
   // Handle downloads
   const handleDownload = async (resource) => {
-    await incrementDownload(resource.id);
-    // Reflect count immediately in local state
-    setResourceList(prev =>
-      prev.map(r => r.id === resource.id ? { ...r, downloads: r.downloads + 1 } : r)
-    );
-    alert(`📥 Downloading: "${resource.title}" (${resource.size})\nFormat: ${resource.format}\n\nYour file has been queued for download successfully!`);
+    try {
+      await incrementDownload(resource.id);
+      // Reflect count immediately in local state
+      setResourceList(prev =>
+        prev.map(r => r.id === resource.id ? { ...r, downloads: r.downloads + 1 } : r)
+      );
+
+      if (resource.fileData) {
+        // Trigger browser download for base64 file
+        const downloadLink = document.createElement("a");
+        downloadLink.href = resource.fileData;
+        
+        let ext = resource.format ? resource.format.toLowerCase() : 'pdf';
+        // Remove special characters for clean filename
+        const safeName = resource.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        downloadLink.download = `${safeName}.${ext}`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      } else {
+        alert(`📥 Downloading Outline: "${resource.title}" (${resource.size})\nFormat: ${resource.format}\n\nNote: This is a pre-seeded mock resource. Actual files uploaded by you will download directly!`);
+      }
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Failed to download resource file.");
+    }
   };
 
   // Handle deletions
@@ -84,18 +167,27 @@ const Resources = () => {
       format: newFormat.toUpperCase(),
       size: newSize,
       description: newDesc,
-      uploadedBy: currentUser?.name || 'Professor'
+      uploadedBy: currentUser?.name || 'Professor',
+      fileData: fileData || null
     };
 
-    const added = await addResource(payload);
-    setResourceList(prev => [added, ...prev]);
-    
-    // Reset Form
-    setNewTitle('');
-    setNewSubject('');
-    setNewDesc('');
-    setShowAddModal(false);
-    alert("🎉 New resource outline successfully added to database!");
+    try {
+      const added = await addResource(payload);
+      setResourceList(prev => [added, ...prev]);
+      
+      // Reset Form
+      setNewTitle('');
+      setNewSubject('');
+      setNewDesc('');
+      setSelectedFile(null);
+      setFileData('');
+      setFileError('');
+      setShowAddModal(false);
+      alert("🎉 New resource document successfully uploaded to database!");
+    } catch (err) {
+      console.error("Upload failed:", err);
+      alert("Failed to add resource to database. Please try again.");
+    }
   };
 
   const handleView = (resource) => {
@@ -287,6 +379,24 @@ const Resources = () => {
               </div>
             </div>
 
+            {previewResource.fileData && (
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden mt-3 h-[250px] relative">
+                {previewResource.format === 'PDF' ? (
+                  <iframe 
+                    src={previewResource.fileData} 
+                    className="w-full h-full" 
+                    title="PDF Preview"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-900 text-slate-400 space-y-1">
+                    <FileText className="h-8 w-8 text-primary dark:text-cyan-400 animate-pulse" />
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-205">Live Preview not available for {previewResource.format}</p>
+                    <p className="text-[10px] text-slate-400">Please download the file to view its contents.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end space-x-3 pt-2">
               <button
                 onClick={() => setPreviewResource(null)}
@@ -294,6 +404,18 @@ const Resources = () => {
               >
                 Close View
               </button>
+              {previewResource.fileData && (
+                <button
+                  onClick={() => {
+                    handleOpenLiveFile(previewResource);
+                    setPreviewResource(null);
+                  }}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition flex items-center space-x-1"
+                >
+                  <Eye className="h-4 w-4" />
+                  <span>Open Fullscreen</span>
+                </button>
+              )}
               <button
                 onClick={() => {
                   handleDownload(previewResource);
@@ -314,7 +436,15 @@ const Resources = () => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-all duration-200">
           <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 border border-slate-250 dark:border-slate-700 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150 relative max-h-[90vh] overflow-y-auto no-scrollbar">
             <button
-              onClick={() => setShowAddModal(false)}
+              onClick={() => {
+                setNewTitle('');
+                setNewSubject('');
+                setNewDesc('');
+                setSelectedFile(null);
+                setFileData('');
+                setFileError('');
+                setShowAddModal(false);
+              }}
               className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-750 transition"
             >
               <X className="h-5 w-5" />
@@ -330,6 +460,34 @@ const Resources = () => {
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4 pt-2">
+              {/* File Upload Zone */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Upload Document File (PDF, PPTX, DOCX) *
+                </label>
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer relative">
+                  <input
+                    type="file"
+                    required
+                    accept=".pdf,.docx,.pptx,.ppt,.doc"
+                    onChange={handleFileChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                  />
+                  <div className="text-center space-y-1">
+                    <Plus className="h-6 w-6 text-primary dark:text-cyan-400 mx-auto" />
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      {selectedFile ? `📎 Selected: ${selectedFile.name}` : "Click to select a document file"}
+                    </p>
+                    <p className="text-[10px] text-slate-455 dark:text-slate-400">
+                      Supports PDF, PPTX, DOCX (Max size: 1 MB)
+                    </p>
+                  </div>
+                </div>
+                {fileError && (
+                  <p className="text-[10px] text-red-500 font-semibold">{fileError}</p>
+                )}
+              </div>
+
               {/* Title */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
@@ -454,7 +612,15 @@ const Resources = () => {
               <div className="flex justify-end space-x-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    setNewTitle('');
+                    setNewSubject('');
+                    setNewDesc('');
+                    setSelectedFile(null);
+                    setFileData('');
+                    setFileError('');
+                    setShowAddModal(false);
+                  }}
                   className="px-4 py-2 border border-slate-200 dark:border-slate-650 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition"
                 >
                   Cancel
